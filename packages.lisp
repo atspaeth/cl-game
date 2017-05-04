@@ -1,9 +1,11 @@
 (defpackage #:game/util
   (:use :common-lisp)
-  (:export :let-some))
+  (:export :some-let*
+	   :-> :->> :as-> :some-as->
+	   :range))
 
 (defpackage :game/loader
-  (:use :common-lisp)
+  (:use :common-lisp :game/util)
   (:export :register-load-func :def-load-func :get-resource))
 
 (defpackage :game

@@ -13,14 +13,14 @@
 
 ;; Load a resource from a file and store it in the resource table.
 (defun load-from-file (name type path &rest args)
-  (let* ((load-func (cdr (assoc type *type-load-funcs*)))
-	     (resource (apply load-func path args)))
+  (some-let* ((load-func (cdr (assoc type *type-load-funcs*)))
+	 (resource (apply load-func path args)))
     (setf (gethash name *resources*) resource)))
 
 ;; Retrieve a resource by name. 
 ;; If it hasn't been loaded yet and a type and path are provided,
 ;;  load it from disk.
-(defun get-resource (name &optional type path &rest args)
+(defun get-resource (name type &optional path &rest args)
   (or
    (gethash name *resources*)
    (and path (apply #'load-from-file name type path args))))
