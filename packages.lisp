@@ -1,7 +1,7 @@
 (defpackage #:game/util
   (:use :common-lisp)
-  (:export :some-let*
-	   :-> :->> :as-> :some-as->
+  (:export :some-let* :with-gensyms
+	   :-> :->> :as-> :some-as-> :some-> :some->>
 	   :range))
 
 (defpackage :game/loader

@@ -10,6 +10,11 @@
   (push (cons type func) *type-load-funcs*))
 (defmacro def-load-func (type arglist &body body)
   `(register-load-func ,type (lambda ,arglist ,@body)))
+(defun unregister-load-func (type)
+  (some-> type
+	  (assoc *type-load-funcs*)
+	  cdr
+	  (setf nil)))
 
 ;; Load a resource from a file and store it in the resource table.
 (defun load-from-file (name type path &rest args)

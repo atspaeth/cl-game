@@ -1,6 +1,11 @@
 (in-package :game/util)
 
 
+;; Create gensysms with the given names.
+(defmacro with-gensyms (names &body body)
+  `(let ,(loop for name in names collecting `(,name (gensym)))
+     ,@body))
+
 
 ;; Pythonesque range: returns integers from a to b inclusive, or
 ;;  if b is not provided, a integers starting at 0 (from 0 to a-1).
@@ -17,6 +22,7 @@
 ;; as-> thread-as     provide a name where the argument will be threaded
 ;; In all three, a symbol not in a list will be assumed to be a function
 ;;  and called on the previous result.
+;; The versions with some- before them return nil if any subexpression does.
 (defmacro -> (&body body)
   (loop for expr in body
      for clause = expr then
@@ -48,7 +54,20 @@
 	   `(let ((,name ,clause))
 	      (when ,name (,expr ,name))))
        finally (return clause)))
-
+(defmacro some-> (&body body)
+  (with-gensyms (name)
+    `(some-as-> ,name
+       ,@(loop for expr in body
+	    collecting
+	      (if (not (listp expr))
+		  expr
+		  (list* (car expr) name (cdr expr)))))))
+(defmacro some->> (&body body)
+  (with-gensyms (name)
+    `(some-as-> ,name
+       ,@(loop for expr in body collecting
+	      (if (not (listp expr)) expr
+		  (append expr (list name)))))))
 
 
 ;; A cross-breed of let* and cond:
