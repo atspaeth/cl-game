@@ -2,8 +2,9 @@
   :description "game: my test Lisp game"
   :version "0.0.1"
   :author "Me!"
-  :depends-on ("sdl2" "apply-argv")
+  :depends-on (:alexandria :sdl2 :livesupport)
+  :serial t
   :components ((:file "packages")
-	       (:file "util" :depends-on ("packages"))
-	       (:file "resource-loader" :depends-on ("util"))
-	       (:file "game" :depends-on ("resource-loader" "util"))))
+               (:file "util")
+               (:file "resource-loader")
+               (:file "game")))

@@ -11,15 +11,12 @@
 (defmacro def-load-func (type arglist &body body)
   `(register-load-func ,type (lambda ,arglist ,@body)))
 (defun unregister-load-func (type)
-  (some-> type
-	  (assoc *type-load-funcs*)
-	  cdr
-	  (setf nil)))
+  (rplacd (assoc type *type-load-funcs*) nil))
 
 ;; Load a resource from a file and store it in the resource table.
 (defun load-from-file (name type path &rest args)
   (some-let* ((load-func (cdr (assoc type *type-load-funcs*)))
-	 (resource (apply load-func path args)))
+              (resource (apply load-func path args)))
     (setf (gethash name *resources*) resource)))
 
 ;; Retrieve a resource by name. 
@@ -30,4 +27,5 @@
    (gethash name *resources*)
    (and path (apply #'load-from-file name type path args))))
 
+(alexandria:hash-table-alist *resources*)
 
