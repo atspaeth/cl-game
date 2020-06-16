@@ -4,7 +4,7 @@
   (:export 
     :+screen-width+ :+screen-height+ 
     :load-texture-on :with-window-and-renderer
-    :draw-atlas-frame :load-atlas
+    :draw-atlas-frame :load-atlases
     :draw-animation :make-animation))
 
 (defpackage :game

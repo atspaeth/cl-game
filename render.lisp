@@ -8,11 +8,18 @@
 (defconstant +screen-height+ 480
   "The height of the render target in pixels.")
 
-(defun load-texture-on (renderer filename)
-  "Load a texture onto our render target using SDL_Image."
-  (sdl2:create-texture-from-surface
-    renderer
-    (sdl2-image:load-image filename)))
+(let (last-renderer texture-table)
+  (defun load-texture-on (renderer filename)
+    "Load a texture onto our render target."
+    ; If the render target has changed, all textures are invalidated.
+    (unless (eq renderer last-renderer)
+      (setf texture-table (make-hash-table)))
+    (or
+      (gethash filename texture-table)
+      (setf (gethash filename texture-table)
+        (sdl2:create-texture-from-surface
+          renderer
+          (sdl2-image:load-image filename))))))
 
 (defmacro with-window-and-renderer ((window renderer) &body body)
   "Combine the SDL with-window and with-renderer macros for concision."
@@ -43,15 +50,15 @@
   "Return the source rect corresponding to a frame of an animation."
   (let* ((rects (gethash animation (atlas-frame-rects atlas)))
          (frame (if cycle?
-                    (mod frame (length rects))
-                    (min frame (length rects)))))
+                    (mod (truncate frame) (length rects))
+                    (min (truncate frame) (length rects)))))
     (elt rects frame)))
 
 (defun draw-texture-rect (renderer texture source-rect
                                    dest-x dest-y
                                    &key flip?)
   "Blit a rectangle of a texture without stretching. Accepts float
-coordinates, but rounds them to the nearest integer. The position 
+coordinates, but rounds them to the nearest integer. The position
 is interpreted as the position of the center."
   (let* ((dest-w (sdl2:rect-width source-rect))
          (dest-h (sdl2:rect-height source-rect))
@@ -76,8 +83,8 @@ is interpreted as the position of the center."
                        rect dest-x dest-y
                        :flip? flip?)))
 
-(defun load-atlas (renderer id filename)
-  "Load a texture atlas from a file into the registry."
+(defun load-atlas (renderer filename)
+  "Load the first texture atlas from a file into the registry."
   (let* ((spritesheet (with-open-file (file filename)
                         (let ((*read-eval* nil))
                           (read file))))
@@ -97,4 +104,33 @@ is interpreted as the position of the center."
       (make-atlas :texture (load-texture-on renderer image-name)
                   :frame-rects frame-rects))))
 
+(defun import-atlas (renderer spritesheet)
+  "Given a single atlas expression, import it to the registry."
+  (let* ((id (car spritesheet))
+         (texture-path (cadr spritesheet))
+         (animations (cddr spritesheet))
+         (rect-table (make-hash-table)))
+    (loop for anim in animations do
+          (let ((name (car anim))
+                (rect-list (cadr anim)))
+            (setf (gethash name rect-table)
+                  (map 'vector
+                       (lambda (rect)
+                         (apply #'sdl2:make-rect rect))
+                       rect-list))))
+    (setf (gethash id *atlas-registry*)
+          (make-atlas :texture (load-texture-on 
+                                 renderer texture-path)
+                      :frame-rects rect-table))))
+
+(defun load-atlases (renderer &rest filenames)
+  "Load texture atlases from a file into the registry."
+  (loop for filename in filenames do
+        (with-open-file (file filename)
+          (loop for spritesheet = 
+                (let ((*read-eval* nil)
+                      (*package* (find-package 'keyword)))
+                  (read file nil))
+                while spritesheet do
+                (import-atlas renderer spritesheet)))))
 

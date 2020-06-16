@@ -13,12 +13,12 @@ it was last queried."
                      (sdl2:get-performance-frequency)))))
          ,@body))))
 
-(defvar *test-atlas* nil)
-
 (defun main ()
   (with-window-and-renderer (wnd renderer)
     (sdl2:set-render-draw-color renderer #x33 #x33 #x33 #x33)
-    (load-atlas renderer :p1 #P"Atlases/p1_spritesheet.txt")
+    (load-atlases renderer 
+                  #P"Atlases/player1.atlas"
+                  #P"Atlases/enemies.atlas")
     (with-dt-timer get-dt-ms
       (sdl2:with-event-loop (:method :poll)
         (:quit () t)
@@ -51,20 +51,25 @@ it was last queried."
   "Step the behavior of the system."
   (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
     (incf *pos-x* (* xaxis dt-ms *move-speed*))
-    (incf *pos-y* (* yaxis dt-ms *move-speed*))
+    (incf *pos-y* (* yaxis dt-ms *move-speed* 0.6))
     ; Looks redundant but isn't - don't change facing without input.
     (when (< xaxis 0) (setf *flip-p* t))
     (when (> xaxis 0) (setf *flip-p* nil))
     (if (not (= xaxis yaxis 0))
       (setf *animation* :walk)
       (setf *animation* :stand)))
-  (incf *frame-index* 0.25))
+  (incf *frame-index* 0.2))
 
 (defun draw-everything (renderer)
   "Render the world to the display."
   (sdl2:render-clear renderer)
-  (draw-atlas-frame renderer :p1
-                        *animation* (truncate *frame-index*)
-                        *pos-x* *pos-y* :flip? *flip-p*)
+  (draw-atlas-frame renderer :player1
+                    *animation* *frame-index*
+                    *pos-x* *pos-y* :flip? *flip-p*)
+  (draw-atlas-frame renderer :fly :fly 
+                    *frame-index*
+                    (- *pos-x* 30)
+                    (- *pos-y* 100)
+                    :flip? (not *flip-p*))
   (sdl2:render-present renderer))
 

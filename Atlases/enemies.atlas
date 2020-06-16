@@ -1,0 +1,25 @@
+(blocker "Atlases/enemies.png"
+  (body ((203 0 51 51)))
+  (mad ((136 66 51 51)))
+  (sad ((188 66 51 51))))
+(fish "Atlases/enemies.png"
+  (dead ((0 69 66 42)))
+  (swim ((76 0 66 42)
+          (73 43 62 43))))
+(fly "Atlases/enemies.png"
+  (dead ((143 0 59 33)))
+  (fly ((0 32 72 36)
+         (0 0 75 31))))
+(poker "Atlases/enemies.png"
+  (mad ((255 0 48 146)))
+  (sad ((304 0 48 146))))
+(slime "Atlases/enemies.png"
+  (dead ((0 112 59 12)))
+  (walk ((52 125 50 28)
+          (0 125 51 26))))
+(snail "Atlases/enemies.png"
+  (shell ((103 119 44 30)))
+  (shell-flipped ((148 118 44 30)))
+  (walk ((143 34 54 31)
+          (67 87 57 31))))
+; vim: set ft=lisp:
