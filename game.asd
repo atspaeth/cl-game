@@ -5,4 +5,5 @@
   :depends-on (:alexandria :sdl2 :sdl2-image :livesupport)
   :serial t
   :components ((:file "packages")
+               (:file "render")
                (:file "game")))

@@ -1,31 +1,5 @@
 (in-package :game)
 
-(defconstant +screen-width+ 640
-  "The width of the render target in pixels.")
-(defconstant +screen-height+ 480
-  "The height of the render target in pixels.")
-
-(defvar *test-atlas* nil
-  "An example texture atlas.")
-
-(defun load-texture-on (renderer filename)
-  "Load a texture onto our render target using SDL_Image."
-  (sdl2:create-texture-from-surface
-    renderer
-    (sdl2-image:load-image filename)))
-
-(defmacro with-window-and-renderer ((window renderer) &body body)
-  "Combine the SDL with-window and with-renderer macros for concision."
-  `(sdl2:with-init (:video)
-     (sdl2:with-window (,window
-                         :title "Maaaaagic"
-                         :w +screen-width+ :h +screen-height+
-                         :flags '(:shown))
-       (sdl2:with-renderer (,renderer ,window :index -1
-                                      :flags '(:accelerated
-                                               :presentvsync))
-         ,@body))))
-
 (defmacro with-dt-timer (name &body body)
   "Introduce a locally-scoped timer which records the time since
 it was last queried."
@@ -39,11 +13,12 @@ it was last queried."
                      (sdl2:get-performance-frequency)))))
          ,@body))))
 
+(defvar *test-atlas* nil)
+
 (defun main ()
   (with-window-and-renderer (wnd renderer)
     (sdl2:set-render-draw-color renderer #x33 #x33 #x33 #x33)
-    (setf *test-atlas*
-          (load-animation-atlas renderer "Atlases/p1_spritesheet.txt"))
+    (load-atlas renderer :p1 #P"Atlases/p1_spritesheet.txt")
     (with-dt-timer get-dt-ms
       (sdl2:with-event-loop (:method :poll)
         (:quit () t)
@@ -53,29 +28,11 @@ it was last queried."
            (update-logic (get-dt-ms))
            (draw-everything renderer)))))))
 
-
-(defun draw-texture-rect (renderer texture source-rect
-                                   dest-x dest-y
-                                   &key flip)
-  "Blit a rectangle of a texture without stretching. Accepts float
-coordinates, but rounds them to the nearest integer."
-  (let* ((dest-w (sdl2:rect-width source-rect))
-         (dest-h (sdl2:rect-height source-rect))
-         (dest-x (round (- dest-x (/ dest-w 2))))
-         (dest-y (round (- dest-y (/ dest-h 2)))))
-    (sdl2:render-copy-ex renderer texture
-                         :source-rect source-rect
-                         :dest-rect (sdl2:make-rect
-                                     dest-x dest-y
-                                     dest-w dest-h)
-                         :flip flip)))
-
 (defvar *animation* :stand)
 (defvar *frame-index* 0)
 (defvar *pos-x* 0)
 (defvar *pos-y* 0)
-(defvar *flips* nil)
-
+(defvar *flip-p* nil)
 (defparameter *move-speed* 0.2)
 
 (defun keyboard-arrow-position ()
@@ -95,8 +52,9 @@ coordinates, but rounds them to the nearest integer."
   (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
     (incf *pos-x* (* xaxis dt-ms *move-speed*))
     (incf *pos-y* (* yaxis dt-ms *move-speed*))
-    (when (< xaxis 0) (setf *flips* '(:horizontal)))
-    (when (> xaxis 0) (setf *flips* '()))
+    ; Looks redundant but isn't - don't change facing without input.
+    (when (< xaxis 0) (setf *flip-p* t))
+    (when (> xaxis 0) (setf *flip-p* nil))
     (if (not (= xaxis yaxis 0))
       (setf *animation* :walk)
       (setf *animation* :stand)))
@@ -105,53 +63,8 @@ coordinates, but rounds them to the nearest integer."
 (defun draw-everything (renderer)
   "Render the world to the display."
   (sdl2:render-clear renderer)
-  (draw-animation-frame renderer *test-atlas*
+  (draw-atlas-frame renderer :p1
                         *animation* (truncate *frame-index*)
-                        *pos-x* *pos-y* :flip *flips*)
+                        *pos-x* *pos-y* :flip? *flip-p*)
   (sdl2:render-present renderer))
-
-
-(defun read-one-from-file (filename)
-  "Read the first lisp expression from a file, ignoring the rest."
-  (with-open-file (file filename)
-    (let ((*read-eval* nil))
-      (read file))))
-
-(defstruct animation-atlas
-  "An atlas containing multiple different animations."
-  texture
-  frame-rects)
-
-(defun animation-atlas-source-rect (atlas animation frame)
-  "Return the source rect corresponding to a frame of an animation."
-  (let ((rects (gethash animation
-                        (animation-atlas-frame-rects atlas))))
-    (elt rects (mod frame (length rects)))))
-
-(defun draw-animation-frame (renderer atlas animation frame
-                                      dest-x dest-y
-                                      &key flip)
-  "Draw the specified frame of the specified animation from an atlas."
-  (let ((rect (animation-atlas-source-rect atlas animation frame)))
-    (draw-texture-rect renderer (animation-atlas-texture atlas)
-                       rect dest-x dest-y
-                       :flip flip)))
-
-(defun load-animation-atlas (renderer filename)
-  "Load a texture atlas from a file, returning an image name and
-the corresponding sequence of animation information."
-  (let* ((spritesheet (read-one-from-file filename))
-         (image-name (cadr spritesheet))
-         (animations (cddr spritesheet))
-         (frame-rects (make-hash-table)))
-    (loop for anim in animations do
-          (let ((name (cadr anim))
-                (rects (caddr anim)))
-            (setf (gethash name frame-rects)
-                  (map 'vector
-                       (lambda (rect)
-                         (apply #'sdl2:make-rect rect))
-                       rects))))
-    (make-animation-atlas :texture (load-texture-on renderer image-name)
-                          :frame-rects frame-rects)))
 
