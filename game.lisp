@@ -16,7 +16,7 @@ it was last queried."
 (defun main ()
   (with-window-and-renderer (wnd renderer)
     (sdl2:set-render-draw-color renderer #x33 #x33 #x33 #x33)
-    (load-atlases renderer 
+    (load-atlases renderer
                   #P"Atlases/player1.atlas"
                   #P"Atlases/enemies.atlas")
     (with-dt-timer get-dt-ms
@@ -27,13 +27,6 @@ it was last queried."
            (livesupport:update-repl-link)
            (update-logic (get-dt-ms))
            (draw-everything renderer)))))))
-
-(defvar *animation* :stand)
-(defvar *frame-index* 0)
-(defvar *pos-x* 0)
-(defvar *pos-y* 0)
-(defvar *flip-p* nil)
-(defparameter *move-speed* 0.2)
 
 (defun keyboard-arrow-position ()
   "Translate the keyboard cursor keys to an x,y pair."
@@ -47,29 +40,37 @@ it was last queried."
           (values (/ px (sqrt 2))
                   (/ py (sqrt 2)))))))
 
+(defvar *player* (make-sprite
+                   :atlas-id :player1
+                   :animation :stand
+                   :frame-rate-ticks 80))
+(defparameter *move-speed* 0.2)
+
+(defvar *fly* (make-sprite
+                :atlas-id :fly
+                :animation :fly
+                :frame-rate-ticks 80))
+
 (defun update-logic (dt-ms)
   "Step the behavior of the system."
   (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
-    (incf *pos-x* (* xaxis dt-ms *move-speed*))
-    (incf *pos-y* (* yaxis dt-ms *move-speed* 0.6))
+    (incf (sprite-x *player*) (* xaxis dt-ms *move-speed*))
+    ; Move slower in Y to give a sort of 2½-d effect.
+    (incf (sprite-y *player*) (* yaxis dt-ms *move-speed* 0.6))
     ; Looks redundant but isn't - don't change facing without input.
-    (when (< xaxis 0) (setf *flip-p* t))
-    (when (> xaxis 0) (setf *flip-p* nil))
+    (when (< xaxis 0) (setf (sprite-flip? *player*) t))
+    (when (> xaxis 0) (setf (sprite-flip? *player*) nil))
     (if (not (= xaxis yaxis 0))
-      (setf *animation* :walk)
-      (setf *animation* :stand)))
-  (incf *frame-index* 0.2))
+      (setf (sprite-animation *player*) :walk)
+      (setf (sprite-animation *player*) :stand)))
+  (setf (sprite-x *fly*) (- (sprite-x *player*) 30)
+        (sprite-y *fly*) (- (sprite-y *player*) 100))
+  (setf (sprite-flip? *fly*) (not (sprite-flip? *player*))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."
   (sdl2:render-clear renderer)
-  (draw-atlas-frame renderer :player1
-                    *animation* *frame-index*
-                    *pos-x* *pos-y* :flip? *flip-p*)
-  (draw-atlas-frame renderer :fly :fly 
-                    *frame-index*
-                    (- *pos-x* 30)
-                    (- *pos-y* 100)
-                    :flip? (not *flip-p*))
+  (sprite-draw *player* renderer)
+  (sprite-draw *fly* renderer)
   (sdl2:render-present renderer))
 

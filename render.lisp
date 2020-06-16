@@ -134,3 +134,28 @@ is interpreted as the position of the center."
                 while spritesheet do
                 (import-atlas renderer spritesheet)))))
 
+
+
+
+;; EXPORTED API FOR ANIMATED SPRITES
+
+(defstruct sprite
+  (x 0.0 :type float)
+  (y 0.0 :type float)
+  atlas-id
+  animation
+  frame-rate-ticks
+  (start-tick (sdl2:get-ticks))
+  flip?)
+
+(defun sprite-draw (sprite renderer)
+  "Draw the current animation frame of a sprite to the renderer."
+  (with-slots (x y animation atlas-id
+                 frame-rate-ticks start-tick flip?)
+      sprite
+    (draw-atlas-frame renderer atlas-id animation
+                      (/ (- (sdl2:get-ticks) start-tick)
+                         frame-rate-ticks)
+                      x y :flip? flip?)))
+
+
