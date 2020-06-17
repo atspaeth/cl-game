@@ -53,19 +53,19 @@ it was last queried."
 
 (defun update-logic (dt-ms)
   "Step the behavior of the system."
-  (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
-    (incf (sprite-x *player*) (* xaxis dt-ms *move-speed*))
-    ; Move slower in Y to give a sort of 2½-d effect.
-    (incf (sprite-y *player*) (* yaxis dt-ms *move-speed* 0.6))
-    ; Looks redundant but isn't - don't change facing without input.
-    (when (< xaxis 0) (setf (sprite-flip? *player*) t))
-    (when (> xaxis 0) (setf (sprite-flip? *player*) nil))
-    (if (not (= xaxis yaxis 0))
-      (setf (sprite-animation *player*) :walk)
-      (setf (sprite-animation *player*) :stand)))
-  (setf (sprite-x *fly*) (- (sprite-x *player*) 30)
-        (sprite-y *fly*) (- (sprite-y *player*) 100))
-  (setf (sprite-flip? *fly*) (not (sprite-flip? *player*))))
+  (with-sprite *player*
+    (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
+      (incf x (* xaxis dt-ms *move-speed*))
+      ; Move slower in Y to give a sort of 2½-d effect.
+      (incf y (* yaxis dt-ms *move-speed* 0.6))
+      (cond ((< xaxis 0) (setf flip? t))
+            ((> xaxis 0) (setf flip? nil)))
+      (if (not (= xaxis yaxis 0))
+        (setf animation :walk)
+        (setf animation :stand)))
+    (setf (sprite-x *fly*) (- x 30)
+          (sprite-y *fly*) (- y 100))
+    (setf (sprite-flip? *fly*) (not flip?))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."

@@ -1,5 +1,4 @@
-(in-package :game/render)
-
+(in-package :game)
 
 ;; SIMPLE SUPPORT BITS
 
@@ -140,22 +139,27 @@ is interpreted as the position of the center."
 ;; EXPORTED API FOR ANIMATED SPRITES
 
 (defstruct sprite
+  "An animated sprite and its position on screen."
   (x 0.0 :type float)
   (y 0.0 :type float)
-  atlas-id
-  animation
-  frame-rate-ticks
-  (start-tick (sdl2:get-ticks))
-  flip?)
+  (atlas-id nil :type symbol)
+  (animation nil :type symbol)
+  (frame-rate-ticks 100 :type fixnum)
+  (start-tick (sdl2:get-ticks) :type fixnum)
+  (flip? nil :type boolean))
+
+(defmacro with-sprite (sprite &body body)
+  "Avoid with-slots for this largish struct."
+  `(with-slots (x y atlas-id animation 
+                  frame-rate-ticks start-tick flip?) 
+       ,sprite
+     ,@body))
 
 (defun sprite-draw (sprite renderer)
   "Draw the current animation frame of a sprite to the renderer."
-  (with-slots (x y animation atlas-id
-                 frame-rate-ticks start-tick flip?)
-      sprite
+  (with-sprite sprite
     (draw-atlas-frame renderer atlas-id animation
                       (/ (- (sdl2:get-ticks) start-tick)
                          frame-rate-ticks)
                       x y :flip? flip?)))
-
 
