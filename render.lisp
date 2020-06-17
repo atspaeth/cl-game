@@ -118,7 +118,7 @@ is interpreted as the position of the center."
                          (apply #'sdl2:make-rect rect))
                        rect-list))))
     (setf (gethash id *atlas-registry*)
-          (make-atlas :texture (load-texture-on 
+          (make-atlas :texture (load-texture-on
                                  renderer texture-path)
                       :frame-rects rect-table))))
 
@@ -126,7 +126,7 @@ is interpreted as the position of the center."
   "Load texture atlases from a file into the registry."
   (loop for filename in filenames do
         (with-open-file (file filename)
-          (loop for spritesheet = 
+          (loop for spritesheet =
                 (let ((*read-eval* nil)
                       (*package* (find-package 'keyword)))
                   (read file nil))
@@ -139,9 +139,7 @@ is interpreted as the position of the center."
 ;; EXPORTED API FOR ANIMATED SPRITES
 
 (defstruct sprite
-  "An animated sprite and its position on screen."
-  (x 0.0 :type float)
-  (y 0.0 :type float)
+  "An animated sprite."
   (atlas-id nil :type symbol)
   (animation nil :type symbol)
   (frame-rate-ticks 100 :type fixnum)
@@ -150,12 +148,12 @@ is interpreted as the position of the center."
 
 (defmacro with-sprite (sprite &body body)
   "Avoid with-slots for this largish struct."
-  `(with-slots (x y atlas-id animation 
-                  frame-rate-ticks start-tick flip?) 
+  `(with-slots (atlas-id animation
+                frame-rate-ticks start-tick flip?)
        ,sprite
      ,@body))
 
-(defun sprite-draw (sprite renderer)
+(defun sprite-draw (sprite renderer x y)
   "Draw the current animation frame of a sprite to the renderer."
   (with-sprite sprite
     (draw-atlas-frame renderer atlas-id animation

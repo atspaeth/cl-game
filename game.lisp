@@ -40,37 +40,69 @@ it was last queried."
           (values (/ px (sqrt 2))
                   (/ py (sqrt 2)))))))
 
-(defvar *player* (make-sprite
-                   :atlas-id :player1
-                   :animation :stand
-                   :frame-rate-ticks 80))
-(defparameter *move-speed* 0.2)
+;; PRETENDING WE HAVE AN ENTITY SYSTEM
 
-(defvar *fly* (make-sprite
-                :atlas-id :fly
-                :animation :fly
-                :frame-rate-ticks 80))
+(defstruct world-position
+  (x 0.0 :type float)
+  (y 0.0 :type float)
+  (parent nil :type symbol))
+
+(defvar *sprites* (make-hash-table))
+(defvar *positions* (make-hash-table))
+
+; Define one player entity.
+(setf (gethash :player *sprites*)
+      (make-sprite
+        :atlas-id :player1
+        :animation :stand
+        :frame-rate-ticks 80))
+(setf (gethash :player *positions*)
+      (make-world-position :x (/ +screen-width+ 2.0)
+                           :y (/ +screen-height+ 2.0)))
+
+; Define one fly entity.
+(setf (gethash :fly *sprites*)
+      (make-sprite
+        :atlas-id :fly
+        :animation :fly
+        :frame-rate-ticks 80))
+(setf (gethash :fly *positions*)
+      (make-world-position :x -60.0 :y -70.0 :parent :player))
+
+(defun resolve-world-position (pos)
+  (with-slots (x y parent) pos
+    (if (no parent) (values x y)
+      (multiple-value-bind (px py)
+          (resolve-world-position
+            (gethash parent *positions*))
+        (values (+ x px) (+ y py))))))
+
+(defun render-system (renderer)
+  (do-hash-table (entity sprite *sprites*)
+    (when-let (pos (gethash entity *positions*))
+      (multiple-value-bind (x y) (resolve-world-position pos)
+        (sprite-draw sprite renderer x y)))))
+
+(defparameter *move-speed* 0.2)
 
 (defun update-logic (dt-ms)
   "Step the behavior of the system."
-  (with-sprite *player*
+  (with-sprite (gethash :player *sprites*)
     (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
-      (incf x (* xaxis dt-ms *move-speed*))
-      ; Move slower in Y to give a sort of 2½-d effect.
-      (incf y (* yaxis dt-ms *move-speed* 0.6))
+      (with-slots (x y) (gethash :player *positions*)
+        (incf x (* xaxis dt-ms *move-speed*))
+        ; Move slower in Y to give a sort of 2½-d effect.
+        (incf y (* yaxis dt-ms *move-speed* 0.6)))
       (cond ((< xaxis 0) (setf flip? t))
             ((> xaxis 0) (setf flip? nil)))
       (if (not (= xaxis yaxis 0))
         (setf animation :walk)
         (setf animation :stand)))
-    (setf (sprite-x *fly*) (- x 30)
-          (sprite-y *fly*) (- y 100))
-    (setf (sprite-flip? *fly*) (not flip?))))
+    (setf (sprite-flip? (gethash :fly *sprites*)) (not flip?))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."
   (sdl2:render-clear renderer)
-  (sprite-draw *player* renderer)
-  (sprite-draw *fly* renderer)
+  (render-system renderer)
   (sdl2:render-present renderer))
 

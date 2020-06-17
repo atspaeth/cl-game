@@ -1,4 +1,4 @@
 (defpackage :game
-  (:use :cl :alexandria)
+  (:use :cl :alexandria :serapeum)
   (:export :main))
 
