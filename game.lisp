@@ -18,6 +18,10 @@ it was last queried."
     (load-atlases renderer
                   #P"Atlases/player1.atlas"
                   #P"Atlases/enemies.atlas")
+    (add-component :fish :bounding-box
+                   :rect (sdl2:make-rect -30 25 60 30))
+    (add-component :player :bounding-box
+                   :rect (sdl2:make-rect -20 5 40 40))
     (with-dt-timer get-dt-ms
       (sdl2:with-event-loop (:method :poll)
         (:quit () t)
@@ -66,7 +70,6 @@ it was last queried."
 (add-component :fish :world-position
                :x 456.0 :y 322.0)
 
-
 (defcomponent bounding-box
   (rect (sdl2:make-rect 0 0 0 0)))
 
@@ -78,14 +81,7 @@ it was last queried."
     (sdl2:set-render-draw-color renderer #xCC #xCC #xCC #xCC)
     (sdl2:render-draw-rect renderer rect)))
 
-(add-component :fish :bounding-box
-               :rect (sdl2:make-rect -30 -15 60 30))
-
-(add-component :player :bounding-box
-               :rect (sdl2:make-rect -20 5 40 40))
-
-
-(defparameter *debug-draw-bounding-boxen* nil)
+(defparameter *debug-draw-bounding-boxen* t)
 
 (defun renderables-sorted-by-y ()
   (sort
@@ -112,6 +108,54 @@ it was last queried."
 
 (defparameter *fish-speed* 0.1)
 
+(defun get-world-rect (pos bbox)
+  (lret ((rect (sdl2:copy-rect (bounding-box-rect bbox))))
+    (multiple-value-bind (x y) (resolve-world-position pos)
+      (incf (sdl2:rect-x rect) (round x))
+      (incf (sdl2:rect-y rect) (round y)))))
+
+(defun collision-vector (rect-a rect-b)
+  "Return whether a collision occurred and the separation vector
+as (values collision? dx dy)."
+  (multiple-value-bind (collision? region)
+      (sdl2:intersect-rect rect-a rect-b)
+    (if (not collision?)
+      (values nil 0 0)
+      (let ((dx (sdl2:rect-width region))
+            (dy (sdl2:rect-height region)))
+        (if (< dx dy)
+            (if (> (sdl2:rect-x rect-a)
+                   (sdl2:rect-x rect-b))
+                (values t dx 0)
+                (values t (- dx) 0))
+            (if (> (sdl2:rect-y rect-a)
+                   (sdl2:rect-y rect-b))
+                (values t 0 dy)
+                (values t 0 (- dy))))))))
+
+
+(defun resolve-collision (elist-a elist-b)
+  "Push two entities apart if they're colliding."
+  (nest
+    (destructuring-bind (id-a pos-a bbox-a) elist-a)
+    (destructuring-bind (id-b pos-b bbox-b) elist-b)
+    (let ((rect-a (get-world-rect pos-a bbox-a))
+          (rect-b (get-world-rect pos-b bbox-b))))
+    (multiple-value-bind (collision? dx dy)
+        (collision-vector rect-a rect-b))
+    (when collision?
+      (incf (world-position-x pos-a) (truncate dx 2))
+      (decf (world-position-x pos-b) (truncate dx 2))
+      (incf (world-position-y pos-a) (truncate dy 2))
+      (decf (world-position-y pos-b) (truncate dy 2)))))
+
+
+
+(defun resolve-collisions (entities)
+  (loop for (entity . others) on entities do
+        (loop for other in others do
+              (resolve-collision entity other))))
+
 (defun update-logic (dt-ms)
   "Step the behavior of the system."
   (with-sprite (get-component :fish :sprite)
@@ -132,7 +176,9 @@ it was last queried."
       (if (not (= xaxis yaxis 0))
         (setf animation :walk)
         (setf animation :stand)))
-    (setf (sprite-flip? (get-component :fly :sprite)) (not flip?))))
+    (setf (sprite-flip? (get-component :fly :sprite)) (not flip?)))
+  (resolve-collisions (alist-of-entities-with
+                        '(:world-position :bounding-box))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."
