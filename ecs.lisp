@@ -26,9 +26,8 @@
           (apply constructor component-args))))
 
 (defun get-component (entity component-type)
-  (gethash entity
-    (car (gethash component-type
-                  *component-registry*))))
+  (when-let (table (car (gethash component-type *component-registry*)))
+    (gethash entity table)))
 
 (define-do-macro do-entities-with
     ((id component-list &optional return) &body body)
@@ -39,18 +38,30 @@
                         (list name `(get-component ,id ,kind)))
          ,@body))))
 
+(defun alist-of-entities-with (component-list)
+  "Cons up an alist of all the entities with a given set of components."
+  (loop for entity being the hash-keys of *entities*
+        when (loop for kind in component-list
+                   if (get-component entity kind)
+                   collect it into components else return nil
+                   finally (return (cons entity components)))
+        collecting it))
+
+
+
 ;; The most fundamental component: a world transform.
 
 (defcomponent world-position
   (x 0.0 :type float)
   (y 0.0 :type float)
-  (parent nil :type symbol))
+  (parent nil))
 
-(defun get-world-position (entity)
-  (when-let (pos (get-component entity :world-position))
-    (with-slots (x y parent) pos
-      (if (no parent) (values x y)
-          (multiple-value-bind (px py)
-              (get-world-position parent)
-            (values (+ x px) (+ y py)))))))
+(defun resolve-world-position (pos)
+  "Get the coordinates in the world frame of a world-position component,
+resolving out the position of any parents."
+  (with-slots (x y parent) pos
+    (if (no parent) (values x y)
+        (multiple-value-bind (px py)
+            (resolve-world-position parent)
+          (values (+ x px) (+ y py))))))
 
