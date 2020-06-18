@@ -59,8 +59,7 @@ it was last queried."
                :animation :fly
                :frame-rate-ticks 80)
 (add-component :fly :world-position
-               :x -60.0 :y -70.0
-               :parent (get-component :player :world-position))
+               :x 60.0 :y 70.0)
 
 
 (add-component :fish :sprite
@@ -94,13 +93,15 @@ it was last queried."
 
 (defun render-system (renderer)
   (loop for (id pos sprite) in (renderables-sorted-by-y) do
-        (multiple-value-bind (x y) (resolve-world-position pos)
-          (sprite-draw sprite renderer x y)))
+        (sprite-draw sprite renderer
+                     (world-position-x pos)
+                     (world-position-y pos)))
   (when *debug-draw-bounding-boxen*
     (do-entities-with (id ((pos :world-position)
                            (bbox :bounding-box)))
-      (multiple-value-bind (x y) (resolve-world-position pos)
-        (bounding-box-draw bbox renderer x y)))))
+      (bounding-box-draw bbox renderer
+                     (world-position-x pos)
+                     (world-position-y pos)))))
 
 
 
@@ -110,9 +111,10 @@ it was last queried."
 
 (defun get-world-rect (pos bbox)
   (lret ((rect (sdl2:copy-rect (bounding-box-rect bbox))))
-    (multiple-value-bind (x y) (resolve-world-position pos)
-      (incf (sdl2:rect-x rect) (round x))
-      (incf (sdl2:rect-y rect) (round y)))))
+    (incf (sdl2:rect-x rect)
+          (round (world-position-x pos)))
+    (incf (sdl2:rect-y rect)
+          (round (world-position-y pos)))))
 
 (defun collision-vector (rect-a rect-b)
   "Return whether a collision occurred and the separation vector

@@ -53,15 +53,5 @@
 
 (defcomponent world-position
   (x 0.0 :type float)
-  (y 0.0 :type float)
-  (parent nil))
-
-(defun resolve-world-position (pos)
-  "Get the coordinates in the world frame of a world-position component,
-resolving out the position of any parents."
-  (with-slots (x y parent) pos
-    (if (no parent) (values x y)
-        (multiple-value-bind (px py)
-            (resolve-world-position parent)
-          (values (+ x px) (+ y py))))))
+  (y 0.0 :type float))
 
