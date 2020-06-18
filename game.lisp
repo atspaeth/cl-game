@@ -40,56 +40,39 @@ it was last queried."
           (values (/ px (sqrt 2))
                   (/ py (sqrt 2)))))))
 
-;; PRETENDING WE HAVE AN ENTITY SYSTEM
-
-(defstruct world-position
-  (x 0.0 :type float)
-  (y 0.0 :type float)
-  (parent nil :type symbol))
-
-(defvar *sprites* (make-hash-table))
-(defvar *positions* (make-hash-table))
-
 ; Define one player entity.
-(setf (gethash :player *sprites*)
-      (make-sprite
-        :atlas-id :player1
-        :animation :stand
-        :frame-rate-ticks 80))
-(setf (gethash :player *positions*)
-      (make-world-position :x (/ +screen-width+ 2.0)
-                           :y (/ +screen-height+ 2.0)))
+(add-component :player :sprite
+               :atlas-id :player1
+               :animation :stand
+               :frame-rate-ticks 80)
+(add-component :player :world-position
+               :x (/ +screen-width+ 2.0)
+               :y (/ +screen-height+ 2.0))
+
 
 ; Define one fly entity.
-(setf (gethash :fly *sprites*)
-      (make-sprite
-        :atlas-id :fly
-        :animation :fly
-        :frame-rate-ticks 80))
-(setf (gethash :fly *positions*)
-      (make-world-position :x -60.0 :y -70.0 :parent :player))
+(add-component :fly :sprite
+               :atlas-id :fly
+               :animation :fly
+               :frame-rate-ticks 80)
+(add-component :fly :world-position
+               :x -60.0 :y -70.0 :parent :player)
 
-(defun resolve-world-position (pos)
-  (with-slots (x y parent) pos
-    (if (no parent) (values x y)
-      (multiple-value-bind (px py)
-          (resolve-world-position
-            (gethash parent *positions*))
-        (values (+ x px) (+ y py))))))
+
 
 (defun render-system (renderer)
-  (do-hash-table (entity sprite *sprites*)
-    (when-let (pos (gethash entity *positions*))
-      (multiple-value-bind (x y) (resolve-world-position pos)
-        (sprite-draw sprite renderer x y)))))
+  (do-entities-with (id ((pos :world-position)
+                         (sprite :sprite)))
+    (multiple-value-bind (x y) (get-world-position id)
+      (sprite-draw sprite renderer x y))))
 
 (defparameter *move-speed* 0.2)
 
 (defun update-logic (dt-ms)
   "Step the behavior of the system."
-  (with-sprite (gethash :player *sprites*)
+  (with-sprite (get-component :player :sprite)
     (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
-      (with-slots (x y) (gethash :player *positions*)
+      (with-slots (x y) (get-component :player :world-position)
         (incf x (* xaxis dt-ms *move-speed*))
         ; Move slower in Y to give a sort of 2½-d effect.
         (incf y (* yaxis dt-ms *move-speed* 0.6)))
@@ -98,7 +81,7 @@ it was last queried."
       (if (not (= xaxis yaxis 0))
         (setf animation :walk)
         (setf animation :stand)))
-    (setf (sprite-flip? (gethash :fly *sprites*)) (not flip?))))
+    (setf (sprite-flip? (get-component :fly :sprite)) (not flip?))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."

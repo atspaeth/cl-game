@@ -138,7 +138,7 @@ is interpreted as the position of the center."
 
 ;; EXPORTED API FOR ANIMATED SPRITES
 
-(defstruct sprite
+(defcomponent sprite
   "An animated sprite."
   (atlas-id nil :type symbol)
   (animation nil :type symbol)

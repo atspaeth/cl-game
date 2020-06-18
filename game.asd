@@ -6,5 +6,6 @@
                :livesupport :serapeum)
   :serial t
   :components ((:file "package")
+               (:file "ecs")
                (:file "render")
                (:file "game")))
