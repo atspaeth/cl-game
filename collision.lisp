@@ -79,15 +79,16 @@ intersect, and the separation vector as (values collision? dx dy)."
     (values (/ x norm) (/ y norm))))
 
 (defun remove-velocity-component (bbox direction-x direction-y)
-  "Zero the component of the velocity in the direction of (x,y)."
+  "Zero the component of the velocity contrary to (x,y)."
   (multiple-value-bind (x y)
       (normalize direction-x direction-y)
     (with-slots (dxdt dydt) bbox
       ; Project the velocity onto the normalized vector, and
       ; remove that component.
       (let ((proj (+ (* dxdt x) (* dydt y))))
-        (setf dxdt (- dxdt (* x proj))
-              dydt (- dydt (* y proj)))))))
+        (when (< proj 0)
+          (setf dxdt (- dxdt (* x proj))
+                dydt (- dydt (* y proj))))))))
 
 
 (defun resolve-collision (elist-a elist-b)
@@ -118,7 +119,7 @@ intersect, and the separation vector as (values collision? dx dy)."
                (incf (world-position-y pos-a) (* dy a))
                (decf (world-position-y pos-b) (* dy b))))))
       (remove-velocity-component bbox-a dx dy)
-      (remove-velocity-component bbox-b dx dy)
+      (remove-velocity-component bbox-b (- dx) (- dy))
       (event-push id-a :collision id-b dx dy)
       (event-push id-b :collision id-a (- dx) (- dy)))))
 

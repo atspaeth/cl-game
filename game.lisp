@@ -65,10 +65,9 @@ seconds since it was last queried."
   (with-sprite (get-component :player :sprite)
     ; Check to see whether the player is on the ground.
     (let (on-ground)
-      (do-entity-events ((type . args) :player)
-        (when (and (eq type :collision)
-                   (< (third args) 0))
-          (setf on-ground t)))
+      (entity-events-case :player
+        (:collision (other dx dy)
+         (when (< dy 0) (setf on-ground t))))
       (with-slots (dxdt dydt) (get-component :player :box-collider)
         (setf dxdt (* *player-speed* (keyboard-arrow-position)))
         (if (and on-ground (keyboard-is-jumping))

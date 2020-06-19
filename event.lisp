@@ -12,12 +12,22 @@
     (push (cons event-name parameters)
           (event-queue-list queue))))
 
-(define-do-macro do-entity-events ((event entity &optional return)
-                                   &body body)
-  "Perform some code for all the events in an entity's queue, then
-empty the queue."
-  `(when-let (queue (get-component ,entity :event-queue))
-     (loop for ,event in (nreverse (event-queue-list queue))
-           do ,@body
-           finally (setf (event-queue-list queue) nil))))
+(defmacro entity-events-case (entity &body clauses)
+  "Pop all events from the named entity's queue in FIFO order, case
+match each one by type, and execute the body with bindings."
+  (with-gensyms (queue event)
+    `(when-let (,queue (get-component ,entity :event-queue))
+       (loop for ,event in (nreverse (event-queue-list ,queue))
+             do (single-event-case
+                  ,event
+                  ,@clauses)
+             finally (setf (event-queue-list ,queue) nil)))))
+
+(defmacro single-event-case (event &body clauses)
+  "Pattern match on a single event."
+  `(case (car ,event)
+     ,@(loop for (type bindings . body) in clauses collecting
+             `(,type
+                (destructuring-bind ,bindings (cdr ,event)
+                  ,@body)))))
 
