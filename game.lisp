@@ -58,8 +58,8 @@ it was last queried."
                      (world-position-y pos)))
   (when *debug-draw-bounding-boxen*
     (do-entities-with (id ((pos :world-position)
-                           (bbox :bounding-box)))
-      (bounding-box-draw bbox renderer
+                           (bbox :box-collider)))
+      (box-collider-draw bbox renderer
                      (world-position-x pos)
                      (world-position-y pos)))))
 
@@ -91,7 +91,7 @@ it was last queried."
         (setf animation :stand)))
     (setf (sprite-flip? (get-component :fly :sprite)) (not flip?)))
   (resolve-collisions (alist-of-entities-with
-                        '(:world-position :bounding-box))))
+                        '(:world-position :box-collider))))
 
 (defun draw-everything (renderer)
   "Render the world to the display."
@@ -109,7 +109,7 @@ it was last queried."
 (add-component :player :world-position
                :x (/ +screen-width+ 2.0)
                :y (/ +screen-height+ 2.0))
-(add-component :player :bounding-box
+(add-component :player :box-collider
                :x 0.0 :y 25.0 :w 40.0 :h 40.0)
 
 ; Define one fly entity.
@@ -128,5 +128,6 @@ it was last queried."
                :frame-rate-ticks 80)
 (add-component :fish :world-position
                :x 456.0 :y 322.0)
-(add-component :fish :bounding-box
-               :x 0.0 :y 40.0 :w 60.0 :h 30.0)
+(add-component :fish :box-collider
+               :x 0.0 :y 40.0 :w 60.0 :h 30.0 :mass 100.0)
+
