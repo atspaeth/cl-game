@@ -129,5 +129,5 @@ it was last queried."
 (add-component :fish :world-position
                :x 456.0 :y 322.0)
 (add-component :fish :box-collider
-               :x 0.0 :y 40.0 :w 60.0 :h 30.0 :mass 100.0)
+               :x 0.0 :y 40.0 :w 60.0 :h 30.0 :mass -1.0)
 

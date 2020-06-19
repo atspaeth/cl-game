@@ -83,15 +83,25 @@ intersect, and the separation vector as (values collision? dx dy)."
     (multiple-value-bind (collision? dx dy)
         (collision-vector rect-a rect-b))
     (when collision?
-      (let* ((ma (box-collider-mass bbox-a))
-             (mb (box-collider-mass bbox-b))
-             (a (/ mb (+ ma mb)))
-             (b (/ ma (+ ma mb))))
-        (incf (world-position-x pos-a) (* dx a))
-        (decf (world-position-x pos-b) (* dx b))
-        (incf (world-position-y pos-a) (* dy a))
-        (decf (world-position-y pos-b) (* dy b))))))
+      (let ((ma (box-collider-mass bbox-a))
+            (mb (box-collider-mass bbox-b)))
+        (cond
+          ((and (< ma 0) (< mb 0))
+           (print "When immovable objects meet."))
+          ((< ma 0)
+           (decf (world-position-x pos-b) dx)
+           (decf (world-position-y pos-b) dy))
+          ((< mb 0)
+           (incf (world-position-x pos-a) dx)
+           (incf (world-position-y pos-a) dy))
+          (t (let ((a (/ mb (+ ma mb)))
+                   (b (/ ma (+ ma mb))))
+               (incf (world-position-x pos-a) (* dx a))
+               (decf (world-position-x pos-b) (* dx b))
+               (incf (world-position-y pos-a) (* dy a))
+               (decf (world-position-y pos-b) (* dy b)))))))))
 
+(get-component :fish :box-collider)
 
 (defun resolve-collisions (entities)
   (loop for (entity . others) on entities do
