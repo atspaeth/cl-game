@@ -8,5 +8,6 @@
   :components ((:file "package")
                (:file "ecs")
                (:file "render")
+               (:file "event")
                (:file "collision")
                (:file "game")))

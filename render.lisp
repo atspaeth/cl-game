@@ -161,3 +161,8 @@ is interpreted as the position of the center."
                          frame-rate-ticks)
                       x y :flip? flip?)))
 
+(defun list-animations (atlas)
+  "For interactive use, list the animation names in an atlas."
+  (when-let (atlas (gethash atlas *atlas-registry*))
+    (hash-table-keys (atlas-frame-rects atlas))))
+

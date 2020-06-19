@@ -1,15 +1,15 @@
 (in-package :game)
 
 (defmacro with-dt-timer (name &body body)
-  "Introduce a locally-scoped timer which records the time since
-it was last queried."
+  "Introduce a locally-scoped timer which records the time in
+seconds since it was last queried."
   (with-gensyms (last-time this-time dt-ticks)
     `(let ((,last-time (sdl2:get-performance-counter)))
        (flet ((,name ()
                 (let* ((,this-time (sdl2:get-performance-counter))
                        (,dt-ticks (- ,this-time ,last-time)))
                   (setf ,last-time ,this-time)
-                  (/ (* 1000.0 ,dt-ticks)
+                  (/ (float ,dt-ticks)
                      (sdl2:get-performance-frequency)))))
          ,@body))))
 
@@ -18,13 +18,13 @@ it was last queried."
     (load-atlases renderer
                   #P"Atlases/player1.atlas"
                   #P"Atlases/enemies.atlas")
-    (with-dt-timer get-dt-ms
+    (with-dt-timer get-dt
       (sdl2:with-event-loop (:method :poll)
         (:quit () t)
         (:idle ()
          (livesupport:continuable
            (livesupport:update-repl-link)
-           (update-logic (get-dt-ms))
+           (update-logic (get-dt))
            (draw-everything renderer)))))))
 
 (defun keyboard-arrow-position ()
@@ -34,10 +34,59 @@ it was last queried."
              1.0 0.0)))
     (let ((px (- (key->int :scancode-d) (key->int :scancode-a)))
           (py (- (key->int :scancode-s) (key->int :scancode-w))))
-      (if (= (* px py) 0.0)
-          (values px py)
-          (values (/ px (sqrt 2))
-                  (/ py (sqrt 2)))))))
+      (values px py))))
+      ; (if (= (* px py) 0.0)
+      ;     (values px py)
+      ;     (values (/ px (sqrt 2))
+      ;             (/ py (sqrt 2)))))))
+
+(defun keyboard-is-jumping ()
+  "Check if the jump key is down."
+  (sdl2:keyboard-state-p :scancode-space))
+
+
+(defparameter *player-speed* 200.0)
+
+(defparameter *fish-speed* 100.0)
+
+(defparameter *jump-base-speed* 500.0)
+
+(defparameter *gravity* 1000.0)
+
+(defun update-logic (dt)
+  "Step the behavior of the system."
+  (with-sprite (get-component :fish :sprite)
+    (with-slots (x y) (get-component :fish :world-position)
+      (when (< x 64.0)
+        (setf flip? t))
+      (when (> x 564.0)
+        (setf flip? nil))
+      (incf x (* dt *fish-speed* (if flip? 1 -1)))))
+  (with-sprite (get-component :player :sprite)
+    ; Check to see whether the player is on the ground.
+    (let (on-ground)
+      (do-entity-events ((type . args) :player)
+        (when (and (eq type :collision)
+                   (< (third args) 0))
+          (setf on-ground t)))
+      (with-slots (dxdt dydt) (get-component :player :box-collider)
+        (setf dxdt (* *player-speed* (keyboard-arrow-position)))
+        (if (and on-ground (keyboard-is-jumping))
+          (setf dydt (- *jump-base-speed*))
+          (incf dydt (* *gravity* dt)))
+        (setf animation :walk)
+        (cond ((< dxdt 0) (setf flip? t))
+              ((> dxdt 0) (setf flip? nil))
+              (t (setf animation :stand)))
+        (unless on-ground (setf animation :jump)))))
+  (do-entities-with (entity ((bbox :box-collider)
+                             (pos :world-position)))
+    (with-slots (x y) pos
+      (with-slots (dxdt dydt) bbox
+        (incf x (* dxdt dt))
+        (incf y (* dydt dt)))))
+  (resolve-collisions (alist-of-entities-with
+                        '(:world-position :box-collider))))
 
 
 (defun renderables-sorted-by-y ()
@@ -45,13 +94,15 @@ it was last queried."
     (alist-of-entities-with '(:world-position :sprite))
     #'<
     :key (lambda (ec)
-           (destructuring-bind (name pos sprite) ec
-             (declare (ignore name sprite))
+           (let ((pos (second ec)))
              (world-position-y pos)))))
 
 (defparameter *debug-draw-bounding-boxen* t)
 
-(defun render-system (renderer)
+(defun draw-everything (renderer)
+  "Render the world to the display."
+  (sdl2:set-render-draw-color renderer #x33 #x33 #x33 #x33)
+  (sdl2:render-clear renderer)
   (loop for (id pos sprite) in (renderables-sorted-by-y) do
         (sprite-draw sprite renderer
                      (world-position-x pos)
@@ -61,43 +112,7 @@ it was last queried."
                            (bbox :box-collider)))
       (box-collider-draw bbox renderer
                      (world-position-x pos)
-                     (world-position-y pos)))))
-
-
-
-(defparameter *player-speed* 0.2)
-
-(defparameter *fish-speed* 0.1)
-
-(defun update-logic (dt-ms)
-  "Step the behavior of the system."
-  (with-sprite (get-component :fish :sprite)
-    (with-slots (x y) (get-component :fish :world-position)
-      (when (< x 64.0)
-        (setf flip? t))
-      (when (> x 564.0)
-        (setf flip? nil))
-      (incf x (* dt-ms *fish-speed* (if flip? 1 -1)))))
-  (with-sprite (get-component :player :sprite)
-    (multiple-value-bind (xaxis yaxis) (keyboard-arrow-position)
-      (with-slots (x y) (get-component :player :world-position)
-        (incf x (* xaxis dt-ms *player-speed*))
-        ; Move slower in Y to give a sort of 2½-d effect.
-        (incf y (* yaxis dt-ms *player-speed* 0.6)))
-      (cond ((< xaxis 0) (setf flip? t))
-            ((> xaxis 0) (setf flip? nil)))
-      (if (not (= xaxis yaxis 0))
-        (setf animation :walk)
-        (setf animation :stand)))
-    (setf (sprite-flip? (get-component :fly :sprite)) (not flip?)))
-  (resolve-collisions (alist-of-entities-with
-                        '(:world-position :box-collider))))
-
-(defun draw-everything (renderer)
-  "Render the world to the display."
-  (sdl2:set-render-draw-color renderer #x33 #x33 #x33 #x33)
-  (sdl2:render-clear renderer)
-  (render-system renderer)
+                     (world-position-y pos))))
   (sdl2:render-present renderer))
 
 
@@ -110,7 +125,8 @@ it was last queried."
                :x (/ +screen-width+ 2.0)
                :y (/ +screen-height+ 2.0))
 (add-component :player :box-collider
-               :x 0.0 :y 25.0 :w 40.0 :h 40.0)
+               :x 0.0 :y 5.0 :w 40.0 :h 80.0)
+(add-component :player :event-queue)
 
 ; Define one fly entity.
 (add-component :fly :sprite
@@ -119,6 +135,14 @@ it was last queried."
                :frame-rate-ticks 80)
 (add-component :fly :world-position
                :x 60.0 :y 70.0)
+
+; Define a floor.
+(add-component :floor :world-position
+               :x (/ +screen-width+ 2.0)
+               :y (float +screen-height+))
+(add-component :floor :box-collider
+               :w (float +screen-width+)
+               :h 20.0 :mass -1.0)
 
 
 ; Define one fish entity.
@@ -129,5 +153,5 @@ it was last queried."
 (add-component :fish :world-position
                :x 456.0 :y 322.0)
 (add-component :fish :box-collider
-               :x 0.0 :y 40.0 :w 60.0 :h 30.0 :mass -1.0)
+               :x 0.0 :y 2.5 :w 60.0 :h 30.0 :mass 10.0)
 

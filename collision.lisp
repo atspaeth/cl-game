@@ -7,6 +7,8 @@ The x and y coordinates actually refer to the *center* of the box."
   (y 0.0 :type float)
   (w 0.0 :type float)
   (h 0.0 :type float)
+  (dxdt 0.0 :type float)
+  (dydt 0.0 :type float)
   (mass 1.0 :type float))
 
 (defun box-collider-left (bbox)
@@ -71,13 +73,28 @@ intersect, and the separation vector as (values collision? dx dy)."
         (values (not (zerop dx)) dx 0.0)
         (values (not (zerop dy)) 0.0 dy))))
 
+(defun normalize (x y)
+  "Normalize an x-y vector."
+  (let ((norm (sqrt (+ (* x x) (* y y)))))
+    (values (/ x norm) (/ y norm))))
+
+(defun remove-velocity-component (bbox direction-x direction-y)
+  "Zero the component of the velocity in the direction of (x,y)."
+  (multiple-value-bind (x y)
+      (normalize direction-x direction-y)
+    (with-slots (dxdt dydt) bbox
+      ; Project the velocity onto the normalized vector, and
+      ; remove that component.
+      (let ((proj (+ (* dxdt x) (* dydt y))))
+        (setf dxdt (- dxdt (* x proj))
+              dydt (- dydt (* y proj)))))))
+
+
 (defun resolve-collision (elist-a elist-b)
   "Push two entities apart if they're colliding."
   (nest
-    (destructuring-bind (id-a pos-a bbox-a) elist-a
-      (declare (ignore id-a)))
-    (destructuring-bind (id-b pos-b bbox-b) elist-b
-      (declare (ignore id-b)))
+    (destructuring-bind (id-a pos-a bbox-a) elist-a)
+    (destructuring-bind (id-b pos-b bbox-b) elist-b)
     (let ((rect-a (get-world-rect pos-a bbox-a))
           (rect-b (get-world-rect pos-b bbox-b))))
     (multiple-value-bind (collision? dx dy)
@@ -99,7 +116,11 @@ intersect, and the separation vector as (values collision? dx dy)."
                (incf (world-position-x pos-a) (* dx a))
                (decf (world-position-x pos-b) (* dx b))
                (incf (world-position-y pos-a) (* dy a))
-               (decf (world-position-y pos-b) (* dy b)))))))))
+               (decf (world-position-y pos-b) (* dy b))))))
+      (remove-velocity-component bbox-a dx dy)
+      (remove-velocity-component bbox-b dx dy)
+      (event-push id-a :collision id-b dx dy)
+      (event-push id-b :collision id-a (- dx) (- dy)))))
 
 (get-component :fish :box-collider)
 
