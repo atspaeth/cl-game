@@ -18,10 +18,6 @@ it was last queried."
     (load-atlases renderer
                   #P"Atlases/player1.atlas"
                   #P"Atlases/enemies.atlas")
-    (add-component :fish :bounding-box
-                   :rect (sdl2:make-rect -30 25 60 30))
-    (add-component :player :bounding-box
-                   :rect (sdl2:make-rect -20 5 40 40))
     (with-dt-timer get-dt-ms
       (sdl2:with-event-loop (:method :poll)
         (:quit () t)
@@ -43,42 +39,38 @@ it was last queried."
           (values (/ px (sqrt 2))
                   (/ py (sqrt 2)))))))
 
-; Define one player entity.
-(add-component :player :sprite
-               :atlas-id :player1
-               :animation :stand
-               :frame-rate-ticks 80)
-(add-component :player :world-position
-               :x (/ +screen-width+ 2.0)
-               :y (/ +screen-height+ 2.0))
-
-
-; Define one fly entity.
-(add-component :fly :sprite
-               :atlas-id :fly
-               :animation :fly
-               :frame-rate-ticks 80)
-(add-component :fly :world-position
-               :x 60.0 :y 70.0)
-
-
-(add-component :fish :sprite
-               :atlas-id :fish
-               :animation :swim
-               :frame-rate-ticks 80)
-(add-component :fish :world-position
-               :x 456.0 :y 322.0)
-
 (defcomponent bounding-box
-  (rect (sdl2:make-rect 0 0 0 0)))
+  "A bounding box in coordinates relative to the object's transform.
+The x and y coordinates actually refer to the *center* of the box."
+  (x 0.0 :type float)
+  (y 0.0 :type float)
+  (w 0.0 :type float)
+  (h 0.0 :type float))
 
-(defun bounding-box-draw (bbox renderer x y)
-  (let ((rect (sdl2:copy-rect
-                (bounding-box-rect bbox))))
-    (incf (sdl2:rect-x rect) (round x))
-    (incf (sdl2:rect-y rect) (round y))
-    (sdl2:set-render-draw-color renderer #xCC #xCC #xCC #xCC)
-    (sdl2:render-draw-rect renderer rect)))
+(defun bounding-box-left (bbox)
+  (with-slots (x w) bbox
+    (- x (/ w 2))))
+
+(defun bounding-box-right (bbox)
+  (with-slots (x w) bbox
+    (+ x (/ w 2))))
+
+(defun bounding-box-top (bbox)
+  (with-slots (y h) bbox
+    (- y (/ h 2))))
+
+(defun bounding-box-bottom (bbox)
+  (with-slots (y h) bbox
+    (+ y (/ h 2))))
+
+(defun bounding-box-draw (bbox renderer screen-x screen-y)
+  (with-slots (w h) bbox
+    (sdl2:with-rects ((rect (round (+ screen-x (bounding-box-left bbox)))
+                            (round (+ screen-y (bounding-box-top bbox)))
+                            (round w)
+                            (round h)))
+      (sdl2:set-render-draw-color renderer #xCC #xCC #xCC #xCC)
+      (sdl2:render-draw-rect renderer rect))))
 
 (defparameter *debug-draw-bounding-boxen* t)
 
@@ -110,30 +102,41 @@ it was last queried."
 (defparameter *fish-speed* 0.1)
 
 (defun get-world-rect (pos bbox)
-  (lret ((rect (sdl2:copy-rect (bounding-box-rect bbox))))
-    (incf (sdl2:rect-x rect)
-          (round (world-position-x pos)))
-    (incf (sdl2:rect-y rect)
-          (round (world-position-y pos)))))
+  "Translate a bounding box to world coordinates."
+  (with-slots (x y w h) bbox
+    (make-bounding-box
+      :x (+ x (world-position-x pos))
+      :y (+ y (world-position-y pos))
+      :w w :h h)))
+
+(defun intervals-overlap (a b c d)
+  "The signed overlap between the intervals (a b) and (c d), i.e. the
+smallest amount by which you could translate the first interval to end
+the overlap."
+  (if (or (<= d a) (>= c b)) 0.0
+    ; Whichever of these two differences is absolutely smallest
+    ; is the direction in which it's easier to separate the two.
+    ; These signs are already known because of the previous line.
+    (if (< (- d a) (- b c))
+        (- d a)
+        (- c b))))
 
 (defun collision-vector (rect-a rect-b)
-  "Return whether a collision occurred and the separation vector
-as (values collision? dx dy)."
-  (multiple-value-bind (collision? region)
-      (sdl2:intersect-rect rect-a rect-b)
-    (if (not collision?)
-      (values nil 0 0)
-      (let ((dx (sdl2:rect-width region))
-            (dy (sdl2:rect-height region)))
-        (if (< dx dy)
-            (if (> (sdl2:rect-x rect-a)
-                   (sdl2:rect-x rect-b))
-                (values t dx 0)
-                (values t (- dx) 0))
-            (if (> (sdl2:rect-y rect-a)
-                   (sdl2:rect-y rect-b))
-                (values t 0 dy)
-                (values t 0 (- dy))))))))
+  "Given two rects in world coordinates, return whether they
+intersect, and the separation vector as (values collision? dx dy)."
+  (let ((dx (intervals-overlap
+              (bounding-box-left rect-a)
+              (bounding-box-right rect-a)
+              (bounding-box-left rect-b)
+              (bounding-box-right rect-b)))
+        (dy (intervals-overlap
+              (bounding-box-top rect-a)
+              (bounding-box-bottom rect-a)
+              (bounding-box-top rect-b)
+              (bounding-box-bottom rect-b))))
+    (if (< (abs dx) (abs dy))
+        (values (not (zerop dx)) dx 0.0)
+        (values (not (zerop dy)) 0.0 dy))))
 
 
 (defun resolve-collision (elist-a elist-b)
@@ -146,10 +149,10 @@ as (values collision? dx dy)."
     (multiple-value-bind (collision? dx dy)
         (collision-vector rect-a rect-b))
     (when collision?
-      (incf (world-position-x pos-a) (truncate dx 2))
-      (decf (world-position-x pos-b) (truncate dx 2))
-      (incf (world-position-y pos-a) (truncate dy 2))
-      (decf (world-position-y pos-b) (truncate dy 2)))))
+      (incf (world-position-x pos-a) (/ dx 2))
+      (decf (world-position-x pos-b) (/ dx 2))
+      (incf (world-position-y pos-a) (/ dy 2))
+      (decf (world-position-y pos-b) (/ dy 2)))))
 
 
 
@@ -189,3 +192,33 @@ as (values collision? dx dy)."
   (render-system renderer)
   (sdl2:render-present renderer))
 
+
+; Define one player entity.
+(add-component :player :sprite
+               :atlas-id :player1
+               :animation :stand
+               :frame-rate-ticks 80)
+(add-component :player :world-position
+               :x (/ +screen-width+ 2.0)
+               :y (/ +screen-height+ 2.0))
+(add-component :player :bounding-box
+               :x 0.0 :y 25.0 :w 40.0 :h 40.0)
+
+; Define one fly entity.
+(add-component :fly :sprite
+               :atlas-id :fly
+               :animation :fly
+               :frame-rate-ticks 80)
+(add-component :fly :world-position
+               :x 60.0 :y 70.0)
+
+
+; Define one fish entity.
+(add-component :fish :sprite
+               :atlas-id :fish
+               :animation :swim
+               :frame-rate-ticks 80)
+(add-component :fish :world-position
+               :x 456.0 :y 322.0)
+(add-component :fish :bounding-box
+               :x 0.0 :y 40.0 :w 60.0 :h 30.0)
