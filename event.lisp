@@ -1,7 +1,5 @@
 (in-package :game)
 
-(register-component-type :event-queue #'list)
-
 (defcomponent event-queue
   "Just a decorated list of events, treated as a FIFO queue."
   list)

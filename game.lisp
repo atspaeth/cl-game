@@ -47,14 +47,29 @@ seconds since it was last queried."
 
 (defparameter *player-speed* 200.0)
 
+(defparameter *player-acceleration* 800.0)
+
 (defparameter *fish-speed* 100.0)
 
 (defparameter *jump-base-speed* 500.0)
 
 (defparameter *gravity* 1000.0)
 
+(defmacro towardsf (place target amount)
+  "For a setfable place which currently contains a number, move that
+value towards some target by at most some amount."
+  (with-gensyms (diff)
+    `(let ((,diff (- ,target ,place)))
+       (if (< (abs ,diff) ,amount)
+         (setf ,place ,target)
+         (incf ,place (* ,amount (signum ,diff)))))))
+
 (defun update-logic (dt)
   "Step the behavior of the system."
+  ; Hack for livecoding: if a frame takes more than a second, we
+  ; probably did something weird and shouldn't actually be updating.
+  (when (> dt 1.0)
+    (return-from update-logic))
   (with-sprite (get-component :fish :sprite)
     (with-slots (x y) (get-component :fish :world-position)
       (when (< x 64.0)
@@ -62,22 +77,31 @@ seconds since it was last queried."
       (when (> x 564.0)
         (setf flip? nil))
       (incf x (* dt *fish-speed* (if flip? 1 -1)))))
-  (with-sprite (get-component :player :sprite)
-    ; Check to see whether the player is on the ground.
-    (let (on-ground)
+  ; General player updates.
+  (nest
+    (with-sprite (get-component :player :sprite))
+    (with-slots (dxdt dydt) (get-component :player :box-collider))
+    (let ((on-ground nil))
       (entity-events-case :player
         (:collision (other dx dy)
-         (when (< dy 0) (setf on-ground t))))
-      (with-slots (dxdt dydt) (get-component :player :box-collider)
-        (setf dxdt (* *player-speed* (keyboard-arrow-position)))
-        (if (and on-ground (keyboard-is-jumping))
-          (setf dydt (- *jump-base-speed*))
-          (incf dydt (* *gravity* dt)))
-        (setf animation :walk)
-        (cond ((< dxdt 0) (setf flip? t))
-              ((> dxdt 0) (setf flip? nil))
-              (t (setf animation :stand)))
-        (unless on-ground (setf animation :jump)))))
+         (when (< dy 0) (setf on-ground t))
+         (when (eq other :fish)
+           (incf dxdt (* 100.0 dx))
+           (incf dydt (* 100.0 dy)))))
+      (towardsf dxdt (* *player-speed* (keyboard-arrow-position))
+                (* dt *player-acceleration*))
+      (if (and on-ground (keyboard-is-jumping))
+        (setf dydt (- *jump-base-speed*))
+        (incf dydt (* *gravity* dt)))
+      ; Flip the sprite when going left.
+      (cond ((< dxdt 0) (setf flip? t))
+            ((> dxdt 0) (setf flip? nil)))
+      ; Animation is walking unless we're standing or jumping.
+      (setf animation (cond ((not on-ground) :jump)
+                            ((not (zerop dxdt)) :walk)
+                            ((sdl2:keyboard-state-p :scancode-s) :duck)
+                            (t :stand)))))
+  ; Update all velocities.
   (do-entities-with (entity ((bbox :box-collider)
                              (pos :world-position)))
     (with-slots (x y) pos
