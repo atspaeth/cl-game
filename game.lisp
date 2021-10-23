@@ -51,9 +51,9 @@ seconds since it was last queried."
 
 (defparameter *fish-speed* 100.0)
 
-(defparameter *jump-base-speed* 500.0)
+(defparameter *jump-base-speed* 300.0)
 
-(defparameter *gravity* 1000.0)
+(defparameter *gravity* 1200.0)
 
 (defmacro towardsf (place target amount)
   "For a setfable place which currently contains a number, move that
@@ -64,43 +64,66 @@ value towards some target by at most some amount."
          (setf ,place ,target)
          (incf ,place (* ,amount (signum ,diff)))))))
 
+
+; The player needs a few variables, but I'm not totally sure which
+; ones yet.... Let's try it with global state before creating a
+; player-control component.
+
+
+(defparameter *coyote-time* 0.5)
+
+(defvar *time-since-on-ground* 0.0)
+(defvar *time-since-started-jumping* 0.0)
+
+(get-component :player :box-collider)
+
 (defun update-logic (dt)
   "Step the behavior of the system."
   ; Hack for livecoding: if a frame takes more than a second, we
   ; probably did something weird and shouldn't actually be updating.
   (when (> dt 1.0)
     (return-from update-logic))
-  (with-sprite (get-component :fish :sprite)
-    (with-slots (x y) (get-component :fish :world-position)
-      (when (< x 64.0)
-        (setf flip? t))
-      (when (> x 564.0)
-        (setf flip? nil))
-      (incf x (* dt *fish-speed* (if flip? 1 -1)))))
-  ; General player updates.
   (nest
-    (with-sprite (get-component :player :sprite))
-    (with-slots (dxdt dydt) (get-component :player :box-collider))
-    (let ((on-ground nil))
+    (with-sprite (get-component :fish :sprite))
+    (with-slots (dxdt) (get-component :fish :box-collider))
+    (with-slots (x y) (get-component :fish :world-position)
+      (cond
+        ((zerop dxdt)
+         (setf dxdt (if flip? (- *fish-speed*) *fish-speed*)))
+        ((< x 64.0)
+         (setf dxdt *fish-speed*))
+        ((> x 564.0)
+         (setf dxdt (- *fish-speed*))))
+      (setf flip? (> dxdt 0))))
+  ; General player updates.
+  (with-sprite (get-component :player :sprite)
+    (with-slots (dxdt dydt) (get-component :player :box-collider)
+      (incf *time-since-on-ground* dt)
       (entity-events-case :player
         (:collision (other dx dy)
-         (when (< dy 0) (setf on-ground t))
+         (when (< dy 0)
+           (setf *time-since-on-ground* 0.0))
          (when (eq other :fish)
            (incf dxdt (* 100.0 dx))
            (incf dydt (* 100.0 dy)))))
       (towardsf dxdt (* *player-speed* (keyboard-arrow-position))
                 (* dt *player-acceleration*))
-      (if (and on-ground (keyboard-is-jumping))
-        (setf dydt (- *jump-base-speed*))
-        (incf dydt (* *gravity* dt)))
-      ; Flip the sprite when going left.
-      (cond ((< dxdt 0) (setf flip? t))
-            ((> dxdt 0) (setf flip? nil)))
-      ; Animation is walking unless we're standing or jumping.
-      (setf animation (cond ((not on-ground) :jump)
-                            ((not (zerop dxdt)) :walk)
-                            ((sdl2:keyboard-state-p :scancode-s) :duck)
-                            (t :stand)))))
+      (let ((on-ground (<= *time-since-on-ground* *coyote-time*)))
+        (when (sdl2:keyboard-state-p :scancode-s)
+          (format t "On ground? ~a. Timer: ~a.~%"
+                  on-ground *time-since-on-ground*))
+        (if (and on-ground (keyboard-is-jumping))
+          (setf dydt (- *jump-base-speed*)
+                on-ground nil)
+          (incf dydt (* *gravity* dt)))
+        ; Flip the sprite when going left.
+        (cond ((< dxdt 0) (setf flip? t))
+              ((> dxdt 0) (setf flip? nil)))
+        ; Animation is walking unless we're standing or jumping.
+        (setf animation (cond ((not on-ground) :jump)
+                              ((not (zerop dxdt)) :walk)
+                              ((sdl2:keyboard-state-p :scancode-s) :duck)
+                              (t :stand))))))
   ; Update all velocities.
   (do-entities-with (entity ((bbox :box-collider)
                              (pos :world-position)))
@@ -110,7 +133,6 @@ value towards some target by at most some amount."
         (incf y (* dydt dt)))))
   (resolve-collisions (alist-of-entities-with
                         '(:world-position :box-collider))))
-
 
 (defun renderables-sorted-by-y ()
   (sort
@@ -172,7 +194,7 @@ value towards some target by at most some amount."
 (add-component :fish :sprite
                :atlas-id :fish
                :animation :swim
-               :frame-rate-ticks 80)
+               :frame-rate-ticks 200)
 (add-component :fish :world-position
                :x 456.0 :y 322.0)
 (add-component :fish :box-collider
